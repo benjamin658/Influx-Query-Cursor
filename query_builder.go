@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+var validUnquotedTimeRegexp = regexp.MustCompile(`^\d+(ns|u|ms|s|m|h|d|w)?$`)
+
 // Duration Duration interface
 type Duration interface {
 	Nanoseconds(uint) Duration
@@ -315,6 +317,7 @@ func (q *Query) Build() string {
 }
 
 var functionMatcher = regexp.MustCompile(`.+\(.+\)$`)
+var mathMatcher = regexp.MustCompile(`^(.+?)((\s*)([\-\+\/\*])(\s*)(-?\d+)(\.\d+)?)+`)
 
 func (q *Query) buildFields() string {
 	if q.fields == nil {
@@ -338,6 +341,8 @@ func (q *Query) buildFields() string {
 
 		if functionMatcher.MatchString(selectField) {
 			fields[i] = selectField
+        } else if mathMatcher.MatchString(selectField) {
+            fields[i] = selectField
 		} else {
 			fields[i] = fmt.Sprintf("\"%s\"", selectField)
 		}
@@ -511,6 +516,10 @@ func getCriteriaTemplate(tag Tag) string {
 	case bool:
 		return fmt.Sprintf(`"%s" %s %t`, tag.key, tag.op, tag.value)
 	default:
+		if tag.key == "time" && validUnquotedTimeRegexp.MatchString(tag.value.(string)) {
+			// 'time' key accepts non-quoted string value (eg: 1535313431000ns)
+			return fmt.Sprintf(`%s %s %s`, tag.key, tag.op, tag.value)
+		}
 		return fmt.Sprintf(`"%s" %s '%s'`, tag.key, tag.op, tag.value)
 	}
 }
